@@ -20,7 +20,7 @@ import (
 
 var port = os.Getenv("PORT")
 var logGroupName = os.Getenv("LOG_GROUP_NAME")
-var streamName, err = uuid.NewV4()
+var streamName  = os.Getenv("LOG_STREAM_NAME")
     
 var sequenceToken = ""
 
@@ -37,6 +37,15 @@ func init() {
 func main() {
 	if logGroupName == "" {
 		log.Fatal("LOG_GROUP_NAME must be specified")
+	}
+	if streamName == "" {
+		log.Print("LOG_STREAM_NAME not specified, using UUID")
+		streamNameUUID,err := uuid.NewV4()
+		if err != nil {
+			fmt.Printf("Something went wrong: %s", err)
+			return
+		}
+		streamName = streamNameUUID.String()
 	}
 
 	if port == "" {
@@ -82,7 +91,7 @@ func sendToCloudWatch(logPart format.LogParts) {
 			},
 		},
 		LogGroupName:  aws.String(logGroupName),
-		LogStreamName: aws.String(streamName.String()),
+		LogStreamName: aws.String(streamName),
 	}
 
 	// first request has no SequenceToken - in all subsequent request we set it
@@ -106,14 +115,16 @@ func initCloudWatchStream() {
 
 	_, err := svc.CreateLogStream(&cloudwatchlogs.CreateLogStreamInput{
 		LogGroupName:  aws.String(logGroupName),
-		LogStreamName: aws.String(streamName.String()),
+		LogStreamName: aws.String(streamName),
 	})
 
-	if err != nil {
+	if err.Error() == "ResourceAlreadyExistsException: The specified log stream already exists" {
+		log.Println("The CloudWatch Logs stream already exists:", streamName)
+	} else if err != nil {
 		log.Fatal(err)
+	} else {
+		log.Println("Created CloudWatch Logs stream:", streamName)
 	}
-
-	log.Println("Created CloudWatch Logs stream:", streamName)
 }
 
 
